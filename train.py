@@ -18,15 +18,15 @@ from sklearn.model_selection import GridSearchCV, RandomizedSearchCV
 from sklearn.preprocessing import StandardScaler
 from p5 import *
 
-
 train_parameters = {
-    'color_space': 'HSV',
-    'orient': 9,
+    'color_space': 'YCrCb',
+    'orient': 10,
     'pix_per_cell': 8,
     'cell_per_block': 2,
     'hog_channel': 'ALL',
     'spatial_size': (16, 16),
-    'hist_bins': 32,
+    'hist_bins': 16,
+    'cells_per_step': 2,
     'spatial_feat': True,
     'hist_feat': True,
     'hog_feat': True,
@@ -38,24 +38,24 @@ model = {
 }
 
 
-def train(parmeters = train_parameters):
+def train(parameters = train_parameters):
     vehicles_files = glob.glob('./vehicles/**/*.png', recursive=True)
     non_vehicles_files = glob.glob('./non-vehicles/**/*.png', recursive=True)
 
-    sample_size = -1
+    sample_size = 100
     cars = vehicles_files[0:sample_size]
     notcars = non_vehicles_files[0:sample_size]
 
-    color_space = parmeters['color_space']  # Can be RGB, HSV, LUV, HLS, YUV, YCrCb
-    orient = parmeters['orient']  # HOG orientations
-    pix_per_cell = parmeters['pix_per_cell']  # HOG pixels per cell
-    cell_per_block = parmeters['cell_per_block']  # HOG cells per block
-    hog_channel = parmeters['hog_channel']  # Can be 0, 1, 2, or "ALL"
-    spatial_size = parmeters['spatial_size']  # Spatial binning dimensions
-    hist_bins = parmeters['hist_bins']  # Number of histogram bins
-    spatial_feat = parmeters['spatial_feat']  # Spatial features on or off
-    hist_feat = parmeters['hist_feat']  # Histogram features on or off
-    hog_feat = parmeters['hog_feat']  # HOG features on or off
+    color_space = parameters['color_space']  # Can be RGB, HSV, LUV, HLS, YUV, YCrCb
+    orient = parameters['orient']  # HOG orientations
+    pix_per_cell = parameters['pix_per_cell']  # HOG pixels per cell
+    cell_per_block = parameters['cell_per_block']  # HOG cells per block
+    hog_channel = parameters['hog_channel']  # Can be 0, 1, 2, or "ALL"
+    spatial_size = parameters['spatial_size']  # Spatial binning dimensions
+    hist_bins = parameters['hist_bins']  # Number of histogram bins
+    spatial_feat = parameters['spatial_feat']  # Spatial features on or off
+    hist_feat = parameters['hist_feat']  # Histogram features on or off
+    hog_feat = parameters['hog_feat']  # HOG features on or off
 
     t = time.time()
     car_features = extract_features(cars, color_space=color_space,
@@ -71,12 +71,13 @@ def train(parmeters = train_parameters):
                             hog_channel=hog_channel, spatial_feat=spatial_feat,
                             hist_feat=hist_feat, hog_feat=hog_feat)
 
-    X = np.vstack((car_features, notcar_features)).astype(np.float64)
+    X = np.vstack((car_features, notcar_features)).astype(np.float32)
+    print(X.shape)
     # Fit a per-column scaler
     X_scaler = StandardScaler().fit(X)
     # Apply the scaler to X
     scaled_X = X_scaler.transform(X)
-
+    print(np.max(scaled_X), np.min(scaled_X), np.max(X), np.min(X))
     # Define the labels vector
     y = np.hstack((np.ones(len(car_features)), np.zeros(len(notcar_features))))
 
@@ -88,6 +89,8 @@ def train(parmeters = train_parameters):
     print('Using:',orient,'orientations',pix_per_cell,
         'pixels per cell and', cell_per_block,'cells per block')
     print('Feature vector length:', len(X_train[0]))
+    print('Training Set Size:', len(X_train))
+    print('Test Set Size:', len(X_test))
 
     # parameters = {'kernel': ('linear', 'rbf'), 'C': [0.1, 1]}
     # svr = SVC()
@@ -105,7 +108,6 @@ def train(parmeters = train_parameters):
 
     return svc, X_scaler
 
-
 def load_data():
     pickle_file = 'model.p'
     global model
@@ -115,24 +117,20 @@ def load_data():
             model.update(param)
     else:
         svc, X_scaler = train()
-        model['X_scaler'] = X_scaler
         model['svc'] = svc
-
+        model['X_scaler'] = X_scaler
         with open(pickle_file, 'wb') as f:
             pickle.dump(model, f, pickle.HIGHEST_PROTOCOL)
 
 
-def detect_car(image, parameters=train_parameters, model=model):
-    color_space = train_parameters['color_space']  # Can be RGB, HSV, LUV, HLS, YUV, YCrCb
-    orient = train_parameters['orient']  # HOG orientations
-    pix_per_cell = train_parameters['pix_per_cell']  # HOG pixels per cell
-    cell_per_block = train_parameters['cell_per_block']  # HOG cells per block
-    spatial_size = train_parameters['spatial_size']  # Spatial binning dimensions
-    hist_bins = train_parameters['hist_bins']  # Number of histogram bins
-    X_scaler = model['X_scaler']
-    svc = model['svc']
+def detect_car(image, X_scaler, parameters=train_parameters, model=model):
 
-    scale_configs = ((400, 500, 0.5), (400, 550, 1), (400, 650, 1.5), (400, 700, 2))
+
+    scale_configs = (
+                    (400, 600, 0.8),
+                    (500, 700, 1.2),
+                    # (600, 700, 1.5)
+                     )
 
     box_lists = []
     t = time.time()
@@ -140,9 +138,9 @@ def detect_car(image, parameters=train_parameters, model=model):
         ystart = config[0]
         ystop = config[1]
         scale = config[2]
-        box_list = find_cars(image, ystart, ystop, scale, svc, X_scaler, orient, pix_per_cell, cell_per_block, spatial_size, hist_bins)
+        box_list = find_cars(image, ystart, ystop, scale, X_scaler, train_parameters, model)
         box_lists.extend(box_list)
-    label_draw_img, heatmap = draw_labeled_boxes(image, box_lists, 8)
+    label_draw_img, heatmap = draw_labeled_boxes(image, box_lists, 2)
     box_draw_img = draw_boxes(image, box_lists)
     t2 = time.time()
     print(round(t2 - t, 2), 'Seconds to prediction...')
@@ -150,7 +148,7 @@ def detect_car(image, parameters=train_parameters, model=model):
 
 
 def test():
-    image = mpimg.imread('./test_images/test4.jpg')
+    image = cv2.imread('./test_images/test4.jpg')
     draw_image = np.copy(image)
     print(image.shape)
     y_start_stop = [np.int(image.shape[0]*(2/3)), image.shape[0]]
@@ -183,7 +181,7 @@ def test():
 
     t = time.time()
     box_list = find_cars(image, ystart, ystop, scale, svc, X_scaler, orient, pix_per_cell, cell_per_block, spatial_size, hist_bins)
-    draw_img, heatmap = draw_labeled_boxes(image, box_list, 4)
+    draw_img, heatmap = draw_labeled_boxes(image, box_list, 8)
     t2 = time.time()
     print(round(t2 - t, 2), 'Seconds to prediction...')
     # plt.imshow(out_img)
@@ -217,21 +215,22 @@ if __name__ == '__main__':
     svc = model['svc']
     y_start_stop = [None, None]  # Min and max in y to search in slide_window()
 
-    test_files = glob.glob('./test_images/*.jpg')
+    test_files = glob.glob('./Capture/*.png')
 
     for test_file in test_files:
-        image = mpimg.imread(test_file)
-        label_draw_img, box_draw_img, heatmap = detect_car(image)
+        image = cv2.imread(test_file)
+        print(np.max(image))
+        label_draw_img, box_draw_img, heatmap = detect_car(image, X_scaler)
 
         fig = plt.figure()
         plt.subplot(131)
-        plt.imshow(label_draw_img)
+        plt.imshow(cv2.cvtColor(label_draw_img, cv2.COLOR_BGR2RGB))
         plt.title('Car Positions')
         plt.subplot(132)
         plt.imshow(heatmap, cmap='hot')
         plt.title('Heat Map')
         plt.subplot(133)
-        plt.imshow(box_draw_img)
+        plt.imshow(cv2.cvtColor(box_draw_img, cv2.COLOR_BGR2RGB))
         plt.title('box')
         fig.tight_layout()
         plt.show()

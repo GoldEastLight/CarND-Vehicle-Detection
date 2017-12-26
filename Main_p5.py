@@ -62,7 +62,7 @@ while (cap.isOpened()):
     # print(final_img.shape)
     # img = np.hstack((draw_img_resized, heatmap_resized))
     cv2.imshow(w_name, draw_img_resized)
-    cv2.imshow('2', heatmap)
+    cv2.imshow('2', box_draw_img)
     # out_debug.write(draw_img)
     # out_project.write(heatmap)
 
