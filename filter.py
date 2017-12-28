@@ -1,6 +1,6 @@
 from collections import deque
 import numpy as np
-from utils import draw_boxes, colors, draw_namebox
+from utils import draw_boxes, colors, draw_namebox, topmost
 from scipy.ndimage.measurements import label
 from collections import namedtuple
 
@@ -9,6 +9,7 @@ class Detector():
         self.heatmap = None
         self.labeled_boxes = None
         self.shape = image_shape
+        self.max_heat = 0
 
     def add_heat(self, heatmap, bbox_list):
         # Iterate through list of bboxes
@@ -33,6 +34,7 @@ class Detector():
     def get_labeled_boxes(self, box_list, thresh=2):
         heat = np.zeros(shape=self.shape).astype(np.float)
         heat = self.add_heat(heat, box_list)
+        self.max_heat = topmost(heat, 200, "headmap")
         heat = self.apply_threshold(heat, threshold=thresh)
         self.heatmap = np.clip(heat, 0, 255)
         labels = label(self.heatmap)
@@ -280,6 +282,9 @@ class Filter():
         # Test
 
         layer2_threshold = min(boxes_len, self.layer2_threshold)
+        if self.detector.max_heat > 20:
+            layer2_threshold = min(self.detector.max_heat-5, 25)
+        print('layer2_threshold', layer2_threshold, boxes_len, self.detector.max_heat)
         self.layer2_output_boxes = self.detector.get_labeled_boxes(self.layer2_input_boxes, layer2_threshold)
         self.layer2_heatmap = self.detector.heatmap
         self.layer2_output_boxes = self.area_filter(self.layer2_output_boxes)

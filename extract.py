@@ -145,6 +145,7 @@ class FeatureExtractor():
             else:
                 hog = self.get_hog_features(feature_image[:, :, hog_channel], feature_vec=False)
                 self.hog_features = hog
+                # hog_feature.append(hog3)
             # print(self.hog_features.shape)
         else:
             self.hog_features = None
@@ -170,6 +171,8 @@ class FeatureExtractor():
             for ch in range(hog_features.shape[2]):
                 hog_channel = hog_features[:, :, ch]
                 hog_feature = hog_channel.ravel()
+            # for ch in range(len(hog_features)):
+            #     hog_feature = hog_features[ch].ravel()
                 features.extend(hog_feature)
         return features
 
@@ -235,6 +238,9 @@ class FeatureExtractor():
                     for ch in range(hog_features.shape[2]):
                         hog_channel = hog_features[ypos:ypos + nblocks_per_window, xpos:xpos + nblocks_per_window, ch]
                         hog_feature = hog_channel.ravel()
+                    # for ch in range(len(hog_features)):
+                    #     hog = hog_features[ch]
+                    #     hog_feature = hog[ypos:ypos + nblocks_per_window, xpos:xpos + nblocks_per_window].ravel()
                         img_features.append(hog_feature)
 
                 img_features = np.concatenate(img_features).reshape(1, -1)

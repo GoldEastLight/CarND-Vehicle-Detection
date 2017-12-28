@@ -20,7 +20,6 @@ train_parameters = {
     'hog_channel': 6, #3 0+1 # 4 0+2 # 5 1 + 2
     'spatial_size': (32, 32),
     'hist_bins': 32,
-    'cells_per_step': 2,
     'spatial_feat': True,
     'hist_feat': True,
     'hog_feat': True,
@@ -44,6 +43,7 @@ def train():
     print('cars:', n_cars)
     print('notcars:', n_notcars)
     sample_size = min(n_cars, n_notcars)
+
     print('sample_size:', sample_size)
     # sample_size = 100
     cars = vehicles_files
@@ -52,6 +52,7 @@ def train():
     # # sample_size = 100
     # cars = vehicles_files[0:sample_size]
     # notcars = non_vehicles_files[0:sample_size]
+
 
     t = time.time()
     car_features = extractor.extract_features(cars)
@@ -124,8 +125,6 @@ class Tracker():
             # (550, 650, 1.6, 2),
             # (500, 720, 2, 1),
             # (400, 700, 3, 2),
-            # (600, 700, 1.5, 2),
-            # (600, 700, 1.5)
         )
 
     def detect_car(self, image):

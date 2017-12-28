@@ -1,8 +1,8 @@
 import cv2
 import numpy as np
+import heapq
 
 colors = [(255, 255, 0), (0,255,0), (0,0,255), (255, 255, 0), (0, 255, 255), (255, 0, 255), (128, 128, 128), (128, 255, 0), (0, 255, 128)]
-
 
 def draw_namebox(img, box, name, color, thick=3):
     x = box[0][0]
@@ -50,3 +50,8 @@ def resize_image(img, shape, title = ''):
     w = resize_img.shape[1]-1
     cv2.rectangle(resize_img, (0, 0), (w, h), (0, 0, 255), 1)
     return resize_img
+
+def topmost(img, top, title=''):
+    n_labels = set(img.ravel())
+    print(title, heapq.nlargest(top, n_labels))
+    return int(np.max(list(n_labels)))
