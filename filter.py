@@ -173,6 +173,16 @@ class Filter():
             ratio = 0
         return ratio
 
+    def find_max_overlap_ratio(self, box):
+        max_overlap_ratio = 0
+        overlap_cnt = 0
+        for vehicle_idx in range(len(self.vehicles)):
+            overlap_ratio = self.cal_overlap_ratio(self.vehicles[vehicle_idx].avg_box, box)
+            overlap_cnt += 1 if overlap_ratio > 0 else 0
+            if overlap_ratio > max_overlap_ratio:
+                max_overlap_ratio = overlap_ratio
+        return max_overlap_ratio, vehicle_idx
+
     def update_box(self, boxes):
 
         n_boxes = len(boxes)
@@ -193,19 +203,23 @@ class Filter():
             max_overlap_ratio = 0
             win_box_idx = 0
             overlap_cnt = 0
+            if self.vehicles[i].updated:
+                continue
             for idx, box in enumerate(boxes):
                 overlap_ratio = self.cal_overlap_ratio(self.vehicles[i].avg_box, box)
                 overlap_cnt += 1 if overlap_ratio > 0 else 0
                 if overlap_ratio > max_overlap_ratio:
                     max_overlap_ratio = overlap_ratio
-                    win_box = idx
+                    win_box_idx = idx
             if max_overlap_ratio > 0:
+                ratio, idx = self.find_max_overlap_ratio(boxes[win_box_idx])
+                vehicle_idx = i
+                if idx != i and ratio > max_overlap_ratio:
+                    vehicle_idx = idx
                 if overlap_cnt > 1:
-                    self.vehicles[i].clean()
-                self.vehicles[i].update(boxes[win_box])
-                boxes = np.delete(boxes, win_box, axis=0)
-
-
+                    self.vehicles[vehicle_idx].clean()
+                self.vehicles[vehicle_idx].update(boxes[win_box_idx])
+                boxes = np.delete(boxes, win_box_idx, axis=0)
 
         if len(boxes) > 0:
             for box in boxes:
@@ -269,7 +283,7 @@ class Filter():
         self.layer2_output_boxes = self.detector.get_labeled_boxes(self.layer2_input_boxes, layer2_threshold)
         self.layer2_heatmap = self.detector.heatmap
         self.layer2_output_boxes = self.area_filter(self.layer2_output_boxes)
-        self.update_box(self.layer1_output_boxes)
+        self.update_box(self.layer2_output_boxes)
 
     def draw_layer_boxes(self, image, box_lists):
         self.filter(box_lists)
