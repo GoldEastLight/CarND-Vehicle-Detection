@@ -1,14 +1,31 @@
 import cv2
 import numpy as np
 
+colors = [(255, 255, 0), (0,255,0), (0,0,255), (255, 255, 0), (0, 255, 255), (255, 0, 255), (128, 128, 128), (128, 255, 0), (0, 255, 128)]
+
+
+def draw_namebox(img, box, name, color, thick=3):
+    x = box[0][0]
+    y = box[0][1] - 10
+    cv2.putText(img, text=name, org=(x, y), fontFace=cv2.FONT_HERSHEY_PLAIN, \
+                fontScale=2, color=color, thickness=2, lineType=cv2.LINE_AA)
+    cv2.rectangle(img, tuple(box[0]), tuple(box[1]), color, thick)
 
 # Define a function to draw bounding boxes
-def draw_boxes(img, bboxes, color=(0, 0, 255), thick=3):
+def draw_boxes(img, bboxes, color=(0, 0, 255), thick=3, colorful=False):
     # Make a copy of the image
     imcopy = np.copy(img)
     # Iterate through the bounding boxes
+    default_thick = thick
     try:
-        for bbox in bboxes:
+        for i, bbox in enumerate(bboxes):
+            if colorful:
+                color = colors[i%len(colors)]
+                if i == 0 or i == len(bboxes)-1:
+                    thick = 3
+                    color = (255,255,255)
+                else:
+                    thick = default_thick
             # Draw a rectangle given bbox coordinates
             cv2.rectangle(imcopy, tuple(bbox[0]), tuple(bbox[1]), color, thick)
     except:

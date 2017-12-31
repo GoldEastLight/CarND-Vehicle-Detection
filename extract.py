@@ -7,7 +7,8 @@ class FeatureExtractor():
     def __init__(self, parameters, model):
         self.parameters = parameters
         self.model = model
-        self.color_space = parameters['color_space']  # Can be RGB, HSV, LUV, HLS, YUV, YCrCb
+        self.c_color_space = parameters['c_color_space']  # Can be RGB, HSV, LUV, HLS, YUV, YCrCb
+        self.h_color_space = parameters['h_color_space']
         self.orient = parameters['orient']  # HOG orientations
         self.pix_per_cell = parameters['pix_per_cell']  # HOG pixels per cell
         self.cell_per_block = parameters['cell_per_block']  # HOG cells per block
@@ -48,16 +49,31 @@ class FeatureExtractor():
         # Return the feature vector
         return features
 
+    # # Define a function to compute color histogram features
+    # # NEED TO CHANGE bins_range if reading .png files with mpimg!
+    # def color_hist(self, img, nbins=32, bins_range=(0, 255)):
+    #     # print("color_hist", np.max(img))
+    #     # Compute the histogram of the color channels separately
+    #     channel1_hist = np.histogram(img[:, :, 0], bins=nbins, range=bins_range)
+    #     channel2_hist = np.histogram(img[:, :, 1], bins=nbins, range=bins_range)
+    #     channel3_hist = np.histogram(img[:, :, 2], bins=nbins, range=bins_range)
+    #     # Concatenate the histograms into a single feature vector
+    #     hist_features = np.concatenate((channel1_hist[0], channel2_hist[0], channel3_hist[0]))
+    #     # hist_features = hist_features/np.max(hist_features)
+    #     # Return the individual histograms, bin_centers and feature vector
+    #     return hist_features
+
     # Define a function to compute color histogram features
     # NEED TO CHANGE bins_range if reading .png files with mpimg!
-    def color_hist(self, img, nbins=32, bins_range=(0, 255)):
+    def color_hist(self, img, nbins=32, bins_range=(0, 256)):
         # print("color_hist", np.max(img))
         # Compute the histogram of the color channels separately
-        channel1_hist = np.histogram(img[:, :, 0], bins=nbins, range=bins_range)
-        channel2_hist = np.histogram(img[:, :, 1], bins=nbins, range=bins_range)
-        channel3_hist = np.histogram(img[:, :, 2], bins=nbins, range=bins_range)
+        channel1_hist = cv2.calcHist([img], [0], None, [nbins], bins_range).ravel()
+        channel2_hist = cv2.calcHist([img], [1], None, [nbins], bins_range).ravel()
+        channel3_hist = cv2.calcHist([img], [2], None, [nbins], bins_range).ravel()
+
         # Concatenate the histograms into a single feature vector
-        hist_features = np.concatenate((channel1_hist[0], channel2_hist[0], channel3_hist[0]))
+        hist_features = np.concatenate((channel1_hist, channel2_hist, channel3_hist))
         # hist_features = hist_features/np.max(hist_features)
         # Return the individual histograms, bin_centers and feature vector
         return hist_features
@@ -65,8 +81,6 @@ class FeatureExtractor():
     def convert_color(self, img, conv='YCrCb'):
         # img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
         if conv == 'YCrCb':
-            return cv2.cvtColor(img, cv2.COLOR_BGR2YCrCb)
-        elif conv == 'YCrCb':
             return cv2.cvtColor(img, cv2.COLOR_BGR2YCrCb)
         elif conv == 'LUV':
             return cv2.cvtColor(img, cv2.COLOR_BGR2LUV)
@@ -76,6 +90,10 @@ class FeatureExtractor():
             return cv2.cvtColor(img, cv2.COLOR_BGR2HLS)
         elif conv == 'YUV':
             return cv2.cvtColor(img, cv2.COLOR_BGR2YUV)
+        elif conv == 'RGB':
+            return cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        elif conv == 'LAB':
+            return cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
         else:
             feature_image = np.copy(img)
             print("Covert_color: No Color")
@@ -107,14 +125,26 @@ class FeatureExtractor():
         hog_feat = self.hog_feat
 
         if hog_feat:
-            if hog_channel == 'ALL':
+            if hog_channel == 6:
                 hog1 = self.get_hog_features(feature_image[:, :, 0], feature_vec=False)
                 hog2 = self.get_hog_features(feature_image[:, :, 1], feature_vec=False)
                 hog3 = self.get_hog_features(feature_image[:, :, 2], feature_vec=False)
                 self.hog_features = np.dstack((hog1, hog2, hog3))
+            elif hog_channel == 3:
+                hog1 = self.get_hog_features(feature_image[:, :, 0], feature_vec=False)
+                hog2 = self.get_hog_features(feature_image[:, :, 1], feature_vec=False)
+                self.hog_features = np.dstack((hog1, hog2))
+            elif hog_channel == 4:
+                hog1 = self.get_hog_features(feature_image[:, :, 0], feature_vec=False)
+                hog3 = self.get_hog_features(feature_image[:, :, 2], feature_vec=False)
+                self.hog_features = np.dstack((hog1, hog3))
+            elif hog_channel == 5:
+                hog2 = self.get_hog_features(feature_image[:, :, 1], feature_vec=False)
+                hog3 = self.get_hog_features(feature_image[:, :, 2], feature_vec=False)
+                self.hog_features = np.dstack((hog2, hog3))
             else:
                 hog = self.get_hog_features(feature_image[:, :, hog_channel], feature_vec=False)
-                self.hog_features = np.dstack((hog))
+                self.hog_features = hog
             # print(self.hog_features.shape)
         else:
             self.hog_features = None
@@ -138,7 +168,8 @@ class FeatureExtractor():
             features.extend(hist_features)
         if hog_features is not None:
             for ch in range(hog_features.shape[2]):
-                hog_feature = hog_features[:, :, ch].ravel()
+                hog_channel = hog_features[:, :, ch]
+                hog_feature = hog_channel.ravel()
                 features.extend(hog_feature)
         return features
 
@@ -146,19 +177,28 @@ class FeatureExtractor():
         features = []
         for filename in image_files:
             img = cv2.imread(filename)
-            features_img = self.get_feature_image(img, self.color_space)
+            features_img = self.get_feature_image(img, self.c_color_space)
             self.extract_color_features(features_img)
+            if self.h_color_space != self.c_color_space:
+                features_img = self.get_feature_image(img, self.h_color_space)
             self.extract_hog_features(features_img)
             features.append(self.flat_features(self.spatial_features, self.hist_features, self.hog_features))
         return np.array(features)
 
     # Define a single function that can extract features using hog sub-sampling and make predictions
     def find_cars(self, img, ystart, ystop, scale, step):
-        ctrans_tosearch = self.get_feature_image(img, self.color_space, ystart, ystop)
+        ctrans_tosearch = self.get_feature_image(img, self.c_color_space, ystart, ystop)
+        if self.h_color_space == self.c_color_space:
+            htrans_tosearch = ctrans_tosearch
+        else:
+            htrans_tosearch = self.get_feature_image(img, self.h_color_space, ystart, ystop)
         if scale != 1:
             imshape = ctrans_tosearch.shape
             ctrans_tosearch = cv2.resize(ctrans_tosearch, (np.int(imshape[1] / scale), np.int(imshape[0] / scale)))
-
+            if self.h_color_space == self.c_color_space:
+                htrans_tosearch = ctrans_tosearch
+            else:
+                htrans_tosearch = cv2.resize(htrans_tosearch, (np.int(imshape[1] / scale), np.int(imshape[0] / scale)))
         # Define blocks and steps as above
         nxblocks = (ctrans_tosearch.shape[1] // self.pix_per_cell) - self.cell_per_block + 1
         nyblocks = (ctrans_tosearch.shape[0] // self.pix_per_cell) - self.cell_per_block + 1
@@ -169,9 +209,10 @@ class FeatureExtractor():
         nxsteps = (nxblocks - nblocks_per_window) // cells_per_step + 1
         nysteps = (nyblocks - nblocks_per_window) // cells_per_step + 1
 
-        hog_features = self.extract_hog_features(ctrans_tosearch)
+        hog_features = self.extract_hog_features(htrans_tosearch)
 
         bbox_list = []
+        slide_boxes = []
         for xb in range(nxsteps):
             for yb in range(nysteps):
                 ypos = yb * cells_per_step
@@ -192,7 +233,8 @@ class FeatureExtractor():
 
                 if self.hog_feat:
                     for ch in range(hog_features.shape[2]):
-                        hog_feature = hog_features[ypos:ypos + nblocks_per_window, xpos:xpos + nblocks_per_window, ch].ravel()
+                        hog_channel = hog_features[ypos:ypos + nblocks_per_window, xpos:xpos + nblocks_per_window, ch]
+                        hog_feature = hog_channel.ravel()
                         img_features.append(hog_feature)
 
                 img_features = np.concatenate(img_features).reshape(1, -1)
@@ -202,16 +244,24 @@ class FeatureExtractor():
                 test_confidence = self.svc.decision_function(test_features)
 
                 # if test_prediction == 1:
-                #     print(np.max(test_features), np.min(test_features), np.mean(test_features))
+                #     # print(np.max(test_features), np.min(test_features), np.mean(test_features))
                 #     print(test_prediction, test_confidence)
 
-                if test_prediction == 1 :#and test_confidence > 0.9:
-                    xbox_left = np.int(xleft * scale)
-                    ytop_draw = np.int(ytop * scale)
-                    win_draw = np.int(window * scale)
-                    box = ((xbox_left, ytop_draw + ystart), (xbox_left + win_draw, ytop_draw + win_draw + ystart))
+                xbox_left = np.int(xleft * scale)
+                ytop_draw = np.int(ytop * scale)
+                win_draw = np.int(window * scale)
+                box = ((xbox_left, ytop_draw + ystart), (xbox_left + win_draw, ytop_draw + win_draw + ystart))
+                slide_boxes.append(box)
+                if test_prediction == 1 and test_confidence > 0.2:
+                    # print(test_prediction, test_confidence)
                     bbox_list.append(box)
+                    if test_confidence > 0.8:
+                        bbox_list.append(box)
+                    if test_confidence > 1.2:
+                        bbox_list.append(box)
+                    if test_confidence > 1.4:
+                        bbox_list.append(box)
 
-        return np.array(bbox_list)
+        return np.array(bbox_list), np.array(slide_boxes)
 
 
