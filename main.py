@@ -1,4 +1,5 @@
-from train import load_data, Tracker
+from train import load_data
+from tracker import Tracker
 from utils import resize_image
 import cv2
 import numpy as np
@@ -48,8 +49,6 @@ while (cap.isOpened()):
     layer1_heatmap, layer2_heatmap, \
     slide_boxes_img, vehicles_img \
         = tracker.detect_car(frame)
-    # print(label_draw_img.shape, heatmap.shape)
-    # print(np.max(label_draw_img), np.max(heatmap))
     scale = 0.4
     resize_shape = (int(frame.shape[1] * scale), int(frame.shape[0] * scale))
     layer1_input_boxes_img_resized = resize_image(layer1_input_boxes_img, resize_shape, "layer1_input_boxes_img")
@@ -59,14 +58,13 @@ while (cap.isOpened()):
     layer1_heatmap_resized = resize_image(layer1_heatmap, resize_shape, 'layer1_heatmap')
     layer2_heatmap_resized = resize_image(layer2_heatmap, resize_shape, 'layer2_heatmap')
     slide_boxes_img_resized = resize_image(slide_boxes_img, resize_shape, 'slide_window')
-    vehicles_img_resized = resize_image(vehicles_img, resize_shape, 'vehicles_img')
+    vehicles_img_resized = resize_image(np.copy(vehicles_img), resize_shape, 'vehicles_img')
 
-    # print(np.max(labeled_img_l1_resized), np.max(heatmap_resized))
     img_h1 = np.hstack((layer1_input_boxes_img_resized, layer1_heatmap_resized, layer1_output_img_resized, ))
     img_h2 = np.hstack((layer2_input_boxes_img_resized, layer2_heatmap_resized, layer2_output_img_resized, ))
     img_h3 = np.hstack((vehicles_img_resized, slide_boxes_img_resized, slide_boxes_img_resized, ))
     img = np.vstack((img_h1, img_h2, img_h3))
-    print(img.shape, layer2_output_img.shape)
+    # print(img.shape, layer2_output_img.shape)
     cv2.imshow(w_name, img)
     # cv2.imshow('1', vehicles_img)
     out_debug.write(img)

@@ -2,7 +2,15 @@ import cv2
 import numpy as np
 import heapq
 
-colors = [(255, 255, 0), (0,255,0), (0,0,255), (255, 255, 0), (0, 255, 255), (255, 0, 255), (128, 128, 128), (128, 255, 0), (0, 255, 128)]
+colors = [(255, 255, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0), \
+          (0, 255, 255), (255, 0, 255), (128, 128, 128), (128, 255, 0), \
+          (0, 255, 128)]
+
+
+show_parameters = {
+
+}
+
 
 def draw_namebox(img, box, name, color, thick=3):
     x = box[0][0]
@@ -10,6 +18,7 @@ def draw_namebox(img, box, name, color, thick=3):
     cv2.putText(img, text=name, org=(x, y), fontFace=cv2.FONT_HERSHEY_PLAIN, \
                 fontScale=2, color=color, thickness=2, lineType=cv2.LINE_AA)
     cv2.rectangle(img, tuple(box[0]), tuple(box[1]), color, thick)
+
 
 # Define a function to draw bounding boxes
 def draw_boxes(img, bboxes, color=(0, 0, 255), thick=3, colorful=False):
@@ -33,11 +42,13 @@ def draw_boxes(img, bboxes, color=(0, 0, 255), thick=3, colorful=False):
     # Return the image copy with boxes drawn
     return imcopy
 
+
 def show_line(img, line):
     x = 10
     y = 670
     cv2.putText(img, text=line, org=(x, y), fontFace=cv2.FONT_HERSHEY_PLAIN, \
                 fontScale=3, color=(0, 255, 255), thickness=3, lineType=cv2.LINE_AA)
+
 
 def resize_image(img, shape, title = ''):
     if len(img.shape) == 3:
@@ -51,7 +62,8 @@ def resize_image(img, shape, title = ''):
     cv2.rectangle(resize_img, (0, 0), (w, h), (0, 0, 255), 1)
     return resize_img
 
+
 def topmost(img, top, title=''):
     n_labels = set(img.ravel())
     print(title, heapq.nlargest(top, n_labels))
-    return int(np.max(list(n_labels)))
+    return int(np.max(list(n_labels))), int(np.mean(list(n_labels)))

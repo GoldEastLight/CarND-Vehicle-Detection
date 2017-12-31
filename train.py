@@ -8,7 +8,7 @@ import os.path
 import time
 import cv2
 from extract import FeatureExtractor
-from filter import Filter
+from tracker import Filter
 from utils import draw_boxes, colors
 
 train_parameters = {
@@ -17,7 +17,7 @@ train_parameters = {
     'orient': 10,
     'pix_per_cell': 8,
     'cell_per_block': 4,
-    'hog_channel': 6, #3 0+1 # 4 0+2 # 5 1 + 2
+    'hog_channel': 6, #3 0+1 # 4 0+2 # 5 1 + 2 #6 1+2+3
     'spatial_size': (32, 32),
     'hist_bins': 32,
     'spatial_feat': True,
@@ -31,7 +31,6 @@ model = {
     'accuracy': None,
 }
 
-
 def train():
     extractor = FeatureExtractor(train_parameters, model)
     vehicles_files = glob.glob('./vehicles/**/*.png', recursive=True)
@@ -43,17 +42,9 @@ def train():
     print('cars:', n_cars)
     print('notcars:', n_notcars)
     sample_size = min(n_cars, n_notcars)
-
     print('sample_size:', sample_size)
-    # sample_size = 100
     cars = vehicles_files
     notcars = non_vehicles_files
-
-    # # sample_size = 100
-    # cars = vehicles_files[0:sample_size]
-    # notcars = non_vehicles_files[0:sample_size]
-
-
     t = time.time()
     car_features = extractor.extract_features(cars)
     notcar_features = extractor.extract_features(notcars)
@@ -113,52 +104,3 @@ def load_data():
         with open(pickle_file, 'wb') as f:
             pickle.dump(model, f, pickle.HIGHEST_PROTOCOL)
 
-
-class Tracker():
-    def __init__(self, parameters=train_parameters, model=model):
-        self.extractor = FeatureExtractor(parameters, model)
-        self.filter = Filter((720, 1280, 3))
-        self.scale_configs = (
-            (410, 480, 1, 1),
-            (390, 620, 1.2, 2),
-            (400, 620, 1.5, 2),
-            # (550, 650, 1.6, 2),
-            # (500, 720, 2, 1),
-            # (400, 700, 3, 2),
-        )
-
-    def detect_car(self, image):
-        box_lists = []
-        slide_boxes_list = []
-        t = time.time()
-        for i, config in enumerate(self.scale_configs):
-            ystart = config[0]
-            ystop = config[1]
-            scale = config[2]
-            step = config[3]
-            box_list, slide_boxes = self.extractor.find_cars(image, ystart, ystop, scale, step)
-            slide_boxes_list.append(slide_boxes)
-            box_lists.extend(box_list)
-            # if i == 0 and len(box_list) < 2:
-            #     ystart, ystop, scale, step = 410, 470, 0.7, 1
-            #     box_list, slide_boxes = self.extractor.find_cars(image, ystart, ystop, scale, step)
-            #     slide_boxes_list.append(slide_boxes)
-            #     box_lists.extend(box_list)
-        layer1_input_boxes_img, layer1_output_img, \
-        layer2_input_boxes_img, layer2_output_img, \
-        layer1_heatmap, layer2_heatmap, vehicles_img \
-            = self.filter.draw_layer_boxes(image, box_lists)
-        slide_boxes_img = image
-        for i, slide_boxes in enumerate(slide_boxes_list):
-            color_idx = i % len(colors)
-            slide_boxes_img = draw_boxes(slide_boxes_img, slide_boxes, color=colors[color_idx], thick=1, colorful=True)
-        t2 = time.time()
-        print(round(t2 - t, 2), 'Seconds to prediction...')
-        layer1_heatmap = ((layer1_heatmap / (np.max(layer1_heatmap) + 1)) * 255).astype(np.uint8)
-        layer2_heatmap = ((layer2_heatmap / (np.max(layer2_heatmap) + 1)) * 255).astype(np.uint8)
-        layer1_heatmap = cv2.applyColorMap(layer1_heatmap, cv2.COLORMAP_HOT)
-        layer2_heatmap = cv2.applyColorMap(layer2_heatmap, cv2.COLORMAP_HOT)
-        return layer1_input_boxes_img, layer1_output_img, \
-               layer2_input_boxes_img, layer2_output_img, \
-               layer1_heatmap, layer2_heatmap, \
-               slide_boxes_img, vehicles_img
