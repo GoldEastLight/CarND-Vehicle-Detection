@@ -17,7 +17,7 @@ The goals / steps of this project are the following:
 
 ## 1. Submission Files
 
-My project has two parts, the first is Advanced Lane Finding which come from project 4 in CarND-Advanced-Lane-Lines folder. I extract useful interface to P4.py. The second is Vehicle Detection in CarND-Vehicle-Detection folder, I also extract useful interface to P5.py. The top entry.py is the P4 and P5 combination entrance. The main.py of each folder is their entrance respectively.
+main.py is entry. No training data provided, you can download [vehicle](https://s3.amazonaws.com/udacity-sdc/Vehicle_Tracking/vehicles.zip) and [non-vehicle](https://s3.amazonaws.com/udacity-sdc/Vehicle_Tracking/non-vehicles.zip), then unzip to the project folder.
 
 
 | CarND-Vehicle-Detection Folder Files            |     Description                                       |
@@ -39,10 +39,10 @@ My project has two parts, the first is Advanced Lane Finding which come from pro
 
 ### 2.1. Data Exploration
 
-I used project provided dataset as the training data at first, but after a variety of comparison and testing, I found the classifier is very sensitive to the yellow lane line. I noticed the data of non-vehicles/GTI folder are not captured from this video, I thought these data have much effect on the classifier of this project, so I only use the data of non-vehicles/Extras folder as the not car data. In fact, my guess is correct, the effect of classifier has been significantly improved. Although these data are unbalanced, the accuracy of the classifier is somewhat unreliable, but it is undeniable that I have obtained a more effective classifier for this project. Finally, I got a accuracy **99.63%**. Next, I will detail my steps.
+I used project provided dataset as the training data at first, but after a variety of comparison and testing, I found the classifier is very sensitive to the yellow lane line. I noticed the data of non-vehicles/GTI folder are not captured from this video, I thought these data have much effect on the classifier of this project, so I only use the data of non-vehicles/Extras folder as the not car data. In fact, my guess is correct, the effect of classifier has been significantly improved. Although these data are unbalanced, the accuracy of the classifier is somewhat unreliable, but it is undeniable that I have obtained a more effective classifier for this project. Finally, I got a accuracy **99.71%**. Next, I will detail my steps.
 
 
-Dataset Quantity.
+Training Dataset, 20% for testing:
 
 |   Cars     |   Not Cars |   Shape    |
 |:----------:|:----------:|:----------:|
@@ -155,8 +155,9 @@ I use the following steps to find the best combination and parameter configurati
 | 2            | 0.9892          | 0.9975          | 0.9957          | 0.9910          | 0.9889          | 0.9943          |
 | 3            | 0.9907          | 0.9932          | 0.9961          | 0.9935          | 0.9889          | 0.9935          |
 
-**Step4**: Explore HOG parameters. All channel, YCrCb color space.
+**Step4**: Explore HOG parameters. All channels, YCrCb color space.
 **Win**: (12, 8, 2)
+
 Here I reserve the bold font parameter settings for further exploration because it is unclear how the result of the final combination with the other features will be.
 
 | orient | pixels per cell | cells per block | feature vector length | YCrCb accuracy      |
@@ -174,7 +175,8 @@ Here I reserve the bold font parameter settings for further exploration because 
 |   10   |       16        |        2        |        1080           |    **0.9953**       |
 |   11   |       16        |        2        |        1188           |    **0.9943**       |
 
-**Step5**: Explore HOG Color space. orient=12, pixels_per_cell=8, cells_per_block=2. To avoid randomness, I test 3 sets every color space. Color space YCrCb wins.
+**Step5**: Explore HOG Color space. orient=12, pixels_per_cell=8, cells_per_block=2, all channels. To avoid randomness, I test 3 sets every color space. Color space YCrCb wins.
+
 **Win**: YCrCb
 
 | HOG | RGB <br> accuracy |**YCrCb** <br> accuracy|**YUV** <br> accuracy|  HSV <br> accuracy  |  HLS <br> accuracy  |
@@ -192,7 +194,7 @@ Here I reserve the bold font parameter settings for further exploration because 
 | True (YCrCb)   |  True (HSV)  |  False      | 0.9993   |                                          
 | True (YCrCb)   |  True (HSV)  |  True(HSV)  | 0.9989   |
 
-Get a very high accuracy, but the actual test results are not good, black car often do not recognize, I think there must be a problem, so no longer pay special attention to higher accuracy, but the actual validation results. So I tried several color combinations and HOG parameters. YUV color space finally looks good. And I slightly reduced the HOG parameters because it was too slow.
+Get a very high accuracy, but the actual test results are not good, black car often do not recognize, I think there must be a problem, so no longer pay special attention to higher accuracy, but the actual validation results. So I tried several color combinations and HOG parameters, different channel. YUV color space finally looks good. And I slightly reduced the HOG parameters because it was too slow.
 
 Final parameters configuration:
 
@@ -377,22 +379,13 @@ Here is how to check the overlap.
 
 <img src="writeup_res/overlap.png" width="50%" alt="overlap" >
 
-CarA: ((1, 1), (4, 4))
-CarB: ((6, 3), (18, 11))
-NewBox: ((0, 0), (16, 8))
-
-Area_CarA: 3 * 3 = 9
-Area_CarB: 8 * 12 = 96
-Area_NewBox: 8 * 16 = 128
-
-Overlap_ratio_A: 9
-Overlap_ratio_B: 50
-
-Cross_rate_A: 9/9 = 1
-Cross_rate_B: 50/96 = 0.52
-
-Size_scale_A: 128 / 9 = 14.2
-Size_scale_B: 128 / 96 = 1.3
+|         CarA          |       CarB               |      NewBox               |
+|:----------------------|:-------------------------|:--------------------------|
+|CarA: ((1, 1), (4, 4)) | CarB: ((6, 3), (18, 11)) | NewBox: ((0, 0), (16, 8)) |
+|Area_CarA: 3 * 3 = 9   |Area_CarB: 8 * 12 = 96 |Area_NewBox: 8 * 16 = 128 |     
+|Overlap_ratio_A: 9    |**Overlap_ratio_B: 50** ||
+|Cross_rate_A: 9/9 = 1 |Cross_rate_B: 50/96 = 0.52||
+|Size_scale_A: 128 / 9 = 14.2|Size_scale_B: 128 / 96 = 1.3||
 
 Considering overlap ratio as first. CarB wins this new box.
 
@@ -420,8 +413,17 @@ Considering overlap ratio as first. CarB wins this new box.
 ## 4. Output
 
 Here's a link to my video result:
-[Project Debug]()
-[Project Output]()
+
+[Project Debug](https://youtu.be/wrFiK8E2kbo)
+
+[Project Output](https://youtu.be/9a-1LKdGTZE)
+
+[Project With Lane Detection Debug](https://youtu.be/ofdl9BE_srA)
+
+[Project With Lane Detection Output](https://youtu.be/_YFXiI7tANE)
+
+[Best Output](./project_video_output.mp4)
+
 
 Here are two frames and their corresponding output:
 
