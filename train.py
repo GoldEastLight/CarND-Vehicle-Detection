@@ -6,19 +6,16 @@ import glob
 import pickle
 import os.path
 import time
-import cv2
 from extract import FeatureExtractor
-from tracker import Filter
-from utils import draw_boxes, colors
 
 train_parameters = {
-    'c_color_space': 'YUV',
+    'c_color_space': 'HSV',
     'h_color_space': 'YUV',
-    'orient': 10,
+    'orient': 11,
     'pix_per_cell': 8,
-    'cell_per_block': 4,
+    'cell_per_block': 2,
     'hog_channel': 6, #3 0+1 # 4 0+2 # 5 1 + 2 #6 1+2+3
-    'spatial_size': (32, 32),
+    'spatial_size': (16, 16),
     'hist_bins': 32,
     'spatial_feat': True,
     'hist_feat': True,
@@ -31,20 +28,22 @@ model = {
     'accuracy': None,
 }
 
-def train():
+
+def train(root):
     extractor = FeatureExtractor(train_parameters, model)
-    vehicles_files = glob.glob('./vehicles/**/*.png', recursive=True)
-    non_vehicles_files = glob.glob('./non-vehicles/non-vehicles/Extras/*.png', recursive=True)
-    # non_vehicles_files = glob.glob('./non-vehicles/**/*.png', recursive=True)
+    vehicles_files = glob.glob(root + 'vehicles/**/*.png', recursive=True)
+    non_vehicles_files = glob.glob(root + 'non-vehicles/non-vehicles/Extras/*.png', recursive=True)
+    # non_vehicles_files = glob.glob(root + 'non-vehicles/**/*.png', recursive=True)
 
     n_cars = len(vehicles_files)
     n_notcars = len(non_vehicles_files)
     print('cars:', n_cars)
     print('notcars:', n_notcars)
-    sample_size = min(n_cars, n_notcars)
+    sample_size = max(n_cars, n_notcars)
     print('sample_size:', sample_size)
-    cars = vehicles_files
-    notcars = non_vehicles_files
+    # sample_size = 10
+    cars = vehicles_files[0:sample_size]
+    notcars = non_vehicles_files[0:sample_size]
     t = time.time()
     car_features = extractor.extract_features(cars)
     notcar_features = extractor.extract_features(notcars)
@@ -88,19 +87,21 @@ def train():
     return svc, X_scaler, accuracy
 
 
-def load_data():
+def load_data(root = None):
     pickle_file = 'model.p'
+    if root is None:
+        root = './'
     global model
-    if os.path.exists(pickle_file):
-        with open(pickle_file, 'rb') as f:
+    if os.path.exists(root + pickle_file):
+        with open(root + pickle_file, 'rb') as f:
             param = pickle.load(f)
             model.update(param)
             print("Test Accuracy of SVC = ", model['accuracy'])
     else:
-        svc, X_scaler, accuracy = train()
+        svc, X_scaler, accuracy = train(root)
         model['svc'] = svc
         model['X_scaler'] = X_scaler
         model['accuracy'] = accuracy
-        with open(pickle_file, 'wb') as f:
+        with open(root + pickle_file, 'wb') as f:
             pickle.dump(model, f, pickle.HIGHEST_PROTOCOL)
 

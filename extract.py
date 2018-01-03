@@ -21,6 +21,7 @@ class FeatureExtractor():
         self.X_scaler = model['X_scaler']
         self.svc = model['svc']
         self.hog_features = None
+        self.hog_method = 1
 
     def get_hog_features(self, img, vis=False, feature_vec=True):
         # Call with two outputs if vis==True
@@ -120,6 +121,31 @@ class FeatureExtractor():
 
         return self.spatial_features, self.hist_features
 
+    def hog_stack(self, hog):
+        if self.hog_method == 1:
+            if len(hog) > 0:
+                return np.dstack(hog)
+            else:
+                return hog
+        else:
+            features = []
+            features.extend(hog)
+            return features
+
+    def hog_reval(self, hog_features, ystart, ystop, xstart, xstop):
+        features = []
+        if self.hog_method == 1:
+            for ch in range(hog_features.shape[2]):
+                hog_channel = hog_features[ystart:ystop, xstart:xstop, ch]
+                hog_feature = hog_channel.ravel()
+                features.extend(hog_feature)
+        else:
+            for ch in range(len(hog_features)):
+                hog_channel = hog_features[ch]
+                hog_feature = hog_channel[ystart:ystop, xstart:xstop].ravel()
+                features.extend(hog_feature)
+        return features
+
     def extract_hog_features(self, feature_image):
         hog_channel = self.hog_channel
         hog_feat = self.hog_feat
@@ -129,24 +155,22 @@ class FeatureExtractor():
                 hog1 = self.get_hog_features(feature_image[:, :, 0], feature_vec=False)
                 hog2 = self.get_hog_features(feature_image[:, :, 1], feature_vec=False)
                 hog3 = self.get_hog_features(feature_image[:, :, 2], feature_vec=False)
-                self.hog_features = np.dstack((hog1, hog2, hog3))
+                self.hog_features = self.hog_stack((hog1, hog2, hog3))
             elif hog_channel == 3:
                 hog1 = self.get_hog_features(feature_image[:, :, 0], feature_vec=False)
                 hog2 = self.get_hog_features(feature_image[:, :, 1], feature_vec=False)
-                self.hog_features = np.dstack((hog1, hog2))
+                self.hog_features = self.hog_stack((hog1, hog2))
             elif hog_channel == 4:
                 hog1 = self.get_hog_features(feature_image[:, :, 0], feature_vec=False)
                 hog3 = self.get_hog_features(feature_image[:, :, 2], feature_vec=False)
-                self.hog_features = np.dstack((hog1, hog3))
+                self.hog_features = self.hog_stack((hog1, hog3))
             elif hog_channel == 5:
                 hog2 = self.get_hog_features(feature_image[:, :, 1], feature_vec=False)
                 hog3 = self.get_hog_features(feature_image[:, :, 2], feature_vec=False)
-                self.hog_features = np.dstack((hog2, hog3))
+                self.hog_features = self.hog_stack((hog2, hog3))
             else:
                 hog = self.get_hog_features(feature_image[:, :, hog_channel], feature_vec=False)
-                self.hog_features = hog
-                # hog_feature.append(hog3)
-            # print(self.hog_features.shape)
+                self.hog_features = self.hog_stack((hog,))
         else:
             self.hog_features = None
 
@@ -168,12 +192,21 @@ class FeatureExtractor():
         if hist_features is not None:
             features.extend(hist_features)
         if hog_features is not None:
-            for ch in range(hog_features.shape[2]):
-                hog_channel = hog_features[:, :, ch]
-                hog_feature = hog_channel.ravel()
-            # for ch in range(len(hog_features)):
-            #     hog_feature = hog_features[ch].ravel()
-                features.extend(hog_feature)
+            shape = np.array(hog_features).shape
+            if len(shape) > 5:
+                ystop = shape[1]
+                xstop = shape[2]
+            else:
+                ystop = shape[0]
+                xstop = shape[1]
+            hog = self.hog_reval(hog_features, 0, ystop, 0, xstop)
+            features.extend(hog)
+            # for ch in range(hog_features.shape[2]):
+            #     hog_channel = hog_features[:, :, ch]
+            #     hog_feature = hog_channel.ravel()
+            # # for ch in range(len(hog_features)):
+            # #     hog_feature = hog_features[ch].ravel()
+            #     features.extend(hog_feature)
         return features
 
     def extract_features(self, image_files):
@@ -235,13 +268,19 @@ class FeatureExtractor():
                     img_features.append(hist_features)
 
                 if self.hog_feat:
-                    for ch in range(hog_features.shape[2]):
-                        hog_channel = hog_features[ypos:ypos + nblocks_per_window, xpos:xpos + nblocks_per_window, ch]
-                        hog_feature = hog_channel.ravel()
-                    # for ch in range(len(hog_features)):
-                    #     hog = hog_features[ch]
-                    #     hog_feature = hog[ypos:ypos + nblocks_per_window, xpos:xpos + nblocks_per_window].ravel()
-                        img_features.append(hog_feature)
+                    hog_xstart = xpos
+                    hog_xstop = xpos + nblocks_per_window
+                    hog_ystart = ypos
+                    hog_ystop = ypos + nblocks_per_window
+                    hog = self.hog_reval(hog_features, hog_ystart, hog_ystop, hog_xstart, hog_xstop)
+                    img_features.append(hog)
+                    # for ch in range(hog_features.shape[2]):
+                    #     hog_channel = hog_features[ypos:ypos + nblocks_per_window, xpos:xpos + nblocks_per_window, ch]
+                    #     hog_feature = hog_channel.ravel()
+                    # # for ch in range(len(hog_features)):
+                    # #     hog = hog_features[ch]
+                    # #     hog_feature = hog[ypos:ypos + nblocks_per_window, xpos:xpos + nblocks_per_window].ravel()
+                    #     img_features.append(hog_feature)
 
                 img_features = np.concatenate(img_features).reshape(1, -1)
                 # Scale features and make a prediction

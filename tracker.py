@@ -1,6 +1,6 @@
 from collections import deque
 import numpy as np
-from utils import draw_boxes, colors, draw_namebox, topmost
+from utils import draw_boxes, colors, draw_namebox, topmost, show_parameters, show_text
 from scipy.ndimage.measurements import label
 from collections import namedtuple
 import time
@@ -9,14 +9,16 @@ import cv2
 from train import train_parameters, model
 
 filter_parameters = {
-    'confidence_threshold':40,
+    'confidence_threshold':60,
     'dir_threshold':2,
     'edge_margin':100,
-    'increase_data_threshold':5,
+    'increase_data_threshold':4,
     'layer1_threshold': 1,
     'layer2_threshold': 10,
     'valid_size_scale_threshold': 2,
-    'box_w_h_scale_threshold': 5
+    'box_w_h_scale_threshold': 5,
+    'max_overlap_ratio_threshold': 32*32,
+    'cross_rate_threshold': 0.3
 }
 
 
@@ -72,7 +74,7 @@ class Detector():
 
 class Vehicle():
     def __init__(self, color, name, box):
-        self.boxes = deque(maxlen=10)
+        self.boxes = deque(maxlen=20)
         self.confidence = 0
         self.direction = 'K' # 'F': far 'N': Near 'K': keep
         self.display = False
@@ -91,7 +93,10 @@ class Vehicle():
     def update(self, box):
         self.updated = True
         if box is not None:
-            self.boxes.append(box)
+            if self.increase_data:
+                self.boxes.appendleft(box)
+            else:
+                self.boxes.append(box)
             self.direction = self.get_direction()
             if len(self.boxes) > 0:
                 sum = 0
@@ -107,8 +112,8 @@ class Vehicle():
                 self.avg_box = None
             self.cal_confidence(True)
         else:
-            if len(self.boxes) > 0:
-                self.boxes.popleft()
+            # if len(self.boxes) > 0:
+            #     self.boxes.popleft()
             self.cal_confidence(False)
         self.cal_display()
 
@@ -171,7 +176,7 @@ class Vehicle():
 
 class Filter():
     def __init__(self, image_shape):
-        self.boxes = deque(maxlen=30)
+        self.boxes = deque(maxlen=20)
         self.detector = Detector(image_shape[:-1])
         self.layer1_heatmap = None
         self.layer2_heatmap = None
@@ -195,45 +200,52 @@ class Filter():
         dy = min(v_b.ymax, d_b.ymax) - max(v_b.ymin, d_b.ymin)
         v_b_area = (v_b.xmax - v_b.xmin) * (v_b.ymax - v_b.ymin)
         d_b_area = (d_b.xmax - d_b.xmin) * (d_b.ymax - d_b.ymin)
-        # min_area = min(v_b_area, d_b_area)
+        min_area = min(v_b_area, d_b_area)
         if (dx >= 0) and (dy >= 0):
             area = dx*dy
-            ratio = area #(area / v_b_area + area / d_b_area) / 2
+            overlap_ratio = area#(area / v_b_area + area / d_b_area) / 2
+            cross_rate = area / min_area
         else:
-            ratio = 0
+            overlap_ratio = 0
+            cross_rate = 0
         size_scale = d_b_area / v_b_area
-        return ratio, size_scale
+        return overlap_ratio, size_scale, cross_rate
 
     def find_max_overlap_ratio(self, box):
         max_overlap_ratio = 0
         overlap_cnt = 0
         max_vehicle_idx = 0
+        max_cross_rate = 0
         for vehicle_idx in range(len(self.vehicles)):
-            overlap_ratio, _ = self.cal_overlap_ratio(self.vehicles[vehicle_idx].avg_box, box)
+            overlap_ratio, _, cross_rate = self.cal_overlap_ratio(self.vehicles[vehicle_idx].avg_box, box)
             overlap_cnt += 1 if overlap_ratio > 0 else 0
             if overlap_ratio > max_overlap_ratio:
                 max_overlap_ratio = overlap_ratio
                 max_vehicle_idx = vehicle_idx
-        return max_overlap_ratio, max_vehicle_idx
+                max_cross_rate = cross_rate
+        return max_overlap_ratio, max_vehicle_idx, max_cross_rate
 
     def update_box(self, boxes, increased_boxes):
-
+        overlap_ratio_threshold = filter_parameters['max_overlap_ratio_threshold']
+        cross_rate_threshold = filter_parameters['cross_rate_threshold']
         for v_i in range(len(self.vehicles)):
             max_overlap_ratio = 0
+            max_cross_rate = 0
             win_box_idx = 0
             overlap_cnt = 0
             if self.vehicles[v_i].updated:
                 continue
             for b_i, box in enumerate(boxes):
-                overlap_ratio, _ = self.cal_overlap_ratio(self.vehicles[v_i].avg_box, box)
+                overlap_ratio, _, cross_rate = self.cal_overlap_ratio(self.vehicles[v_i].avg_box, box)
                 overlap_cnt += 1 if overlap_ratio > 0 else 0
                 if overlap_ratio > max_overlap_ratio:
                     max_overlap_ratio = overlap_ratio
+                    max_cross_rate = cross_rate
                     win_box_idx = b_i
-            if max_overlap_ratio > 0:
-                ratio, max_v_i = self.find_max_overlap_ratio(boxes[win_box_idx])
+            if max_overlap_ratio > overlap_ratio_threshold and max_cross_rate > cross_rate_threshold:
+                ratio, max_v_i, max_cross_rate = self.find_max_overlap_ratio(boxes[win_box_idx])
                 vehicle_idx = v_i
-                if max_v_i != v_i and ratio > max_overlap_ratio:
+                if max_v_i != v_i and ratio > max_overlap_ratio and max_cross_rate > cross_rate_threshold:
                     vehicle_idx = max_v_i
                 if overlap_cnt > 1:
                     self.vehicles[vehicle_idx].clean()
@@ -245,16 +257,19 @@ class Filter():
             max_overlap_ratio = 0
             win_box_idx = 0
             valid_size_scale = 0
+            max_cross_rate = 0
             if self.vehicles[v_i].increase_data:
                 self.increase_data = True
                 for b_i, box in enumerate(increased_boxes):
-                    overlap_ratio, size_scale = self.cal_overlap_ratio(self.vehicles[v_i].avg_box, box)
+                    overlap_ratio, size_scale, cross_rate = self.cal_overlap_ratio(self.vehicles[v_i].avg_box, box)
                     if overlap_ratio > max_overlap_ratio:
                         max_overlap_ratio = overlap_ratio
+                        max_cross_rate = cross_rate
                         win_box_idx = b_i
                         valid_size_scale = size_scale
-                if max_overlap_ratio > 0 and valid_size_scale < filter_parameters['valid_size_scale_threshold']:
-                    ratio, max_v_i = self.find_max_overlap_ratio(increased_boxes[win_box_idx])
+                if max_overlap_ratio > overlap_ratio_threshold and max_cross_rate > 0.6 \
+                        and valid_size_scale < filter_parameters['valid_size_scale_threshold']:
+                    ratio, max_v_i, max_cross_rate = self.find_max_overlap_ratio(increased_boxes[win_box_idx])
                     if v_i == max_v_i:
                         self.vehicles[v_i].update(increased_boxes[win_box_idx])
 
@@ -319,15 +334,14 @@ class Filter():
 
         layer2_threshold = min(boxes_len, self.layer2_threshold)
         print('layer2_threshold', layer2_threshold, boxes_len, self.layer2_max_heat)
-        structure = [[1,1,1],[1,1,1],[1,1,1]]
+        structure = None#[[1,1,1],[1,1,1],[1,1,1]]
         self.layer2_output_boxes = self.detector.get_labeled_boxes(self.layer2_input_boxes, layer2_threshold, structure)
         self.layer2_max_heat = self.detector.max_heat
         self.layer2_heatmap = self.detector.heatmap
         self.layer2_output_boxes = self.area_filter(self.layer2_output_boxes)
         self.update_box(self.layer2_output_boxes, self.layer1_output_boxes)
 
-    def draw_layer_boxes(self, image, box_lists):
-        self.filter(box_lists)
+    def draw_layer_boxes(self, image):
         layer1_input_boxes_img = draw_boxes(image, self.layer1_input_boxes)
         layer1_output_img = draw_boxes(image, self.layer1_output_boxes)
         layer2_input_boxes_img = draw_boxes(image, self.layer2_input_boxes)
@@ -343,42 +357,86 @@ class Tracker():
     def __init__(self, parameters=train_parameters, model=model):
         self.extractor = FeatureExtractor(parameters, model)
         self.filter = Filter((720, 1280, 3))
+        self.slide_boxes_list = []
+        self.time = 0
         self.scale_configs = (
             (410, 480, 0.8, 1),
-            (400, 550, 1.1, 1),
-            (400, 620, 1.5, 2),
+            (400, 550, 1.5, 2),
+            (400, 620, 2, 2),
+            # (400, 620, 2, 1),
+            # (400, 620, 2.5, 1),
+            # (400, 620, 2, 1),
         )
+        self.fill_show_parameters()
 
     def detect_car(self, image):
         box_lists = []
-        slide_boxes_list = []
+        self.slide_boxes_list = []
         t = time.time()
         for i, config in enumerate(self.scale_configs):
             ystart = config[0]
             ystop = config[1]
             scale = config[2]
             step = config[3]
-            if self.filter.layer1_max_heat > 5 and not self.filter.increase_data:
-                step = 2
+            # if self.filter.layer1_max_heat > 5 and not self.filter.increase_data:
+            #     step = 2
             box_list, slide_boxes = self.extractor.find_cars(image, ystart, ystop, scale, step)
-            slide_boxes_list.append(slide_boxes)
+            self.slide_boxes_list.append(slide_boxes)
             box_lists.extend(box_list)
+        self.filter.filter(box_lists)
+        t2 = time.time()
+        self.time = round(t2-t, 2)
+        show_parameters["Detect Time"] = str(self.time)
+        print(self.time, 'Seconds to prediction...')
 
+    def pipeline(self, image):
+        self.detect_car(image)
         layer1_input_boxes_img, layer1_output_img, \
         layer2_input_boxes_img, layer2_output_img, \
         layer1_heatmap, layer2_heatmap, vehicles_img \
-            = self.filter.draw_layer_boxes(image, box_lists)
+            = self.filter.draw_layer_boxes(image)
         slide_boxes_img = image
-        for i, slide_boxes in enumerate(slide_boxes_list):
+        for i, slide_boxes in enumerate(self.slide_boxes_list):
             color_idx = i % len(colors)
             slide_boxes_img = draw_boxes(slide_boxes_img, slide_boxes, color=colors[color_idx], thick=1, colorful=True)
-        t2 = time.time()
-        print(round(t2 - t, 2), 'Seconds to prediction...')
         layer1_heatmap = ((layer1_heatmap / (np.max(layer1_heatmap) + 1)) * 255).astype(np.uint8)
         layer2_heatmap = ((layer2_heatmap / (np.max(layer2_heatmap) + 1)) * 255).astype(np.uint8)
         layer1_heatmap = cv2.applyColorMap(layer1_heatmap, cv2.COLORMAP_HOT)
         layer2_heatmap = cv2.applyColorMap(layer2_heatmap, cv2.COLORMAP_HOT)
+        parameter_img = show_text(np.zeros_like(image), show_parameters)
         return layer1_input_boxes_img, layer1_output_img, \
                layer2_input_boxes_img, layer2_output_img, \
                layer1_heatmap, layer2_heatmap, \
-               slide_boxes_img, vehicles_img
+               slide_boxes_img, vehicles_img, parameter_img
+
+    def draw_vehicles_img(self, img):
+        return self.filter.draw_vehicles(img)
+
+    show_parameters = {
+        "Detect Time": 0,
+        "Orient": 0,
+        "Pixels per cell": 0,
+        "Cells per block": 0,
+        "Training accuracy": 0,
+        "Spatial size": 0,
+        "Histogram bins": 0,
+        "Layer1 threshold": 0,
+        "Layer2 threshold": 0,
+        "Layer1 max heat": 0,
+        "Layer2 max heat": 0,
+        "C Color Space": None,
+        "H Color Space": None,
+    }
+    def fill_show_parameters(self):
+        show_parameters["Training accuracy"] = model["accuracy"]
+        show_parameters["C Color Space"] = train_parameters['c_color_space']
+        show_parameters["H Color Space"] = train_parameters['h_color_space']
+        show_parameters["Orient"] = train_parameters['orient']
+        show_parameters["Pixels per cell"] = train_parameters['pix_per_cell']
+        show_parameters["Cells per block"] = train_parameters['cell_per_block']
+        show_parameters["Spatial size"] = train_parameters['spatial_size']
+        show_parameters["Histogram bins"] = train_parameters['hist_bins']
+        show_parameters["Layer1 threshold"] = self.filter.layer1_threshold
+        show_parameters["Layer1 max heat"] = self.filter.layer1_max_heat
+        show_parameters["Layer2 threshold"] = self.filter.layer2_threshold
+        show_parameters["Layer2 max heat"] = self.filter.layer2_max_heat

@@ -1,15 +1,28 @@
 import cv2
 import numpy as np
 import heapq
+from collections import OrderedDict
 
 colors = [(255, 255, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0), \
           (0, 255, 255), (255, 0, 255), (128, 128, 128), (128, 255, 0), \
           (0, 255, 128)]
 
 
-show_parameters = {
-
-}
+show_parameters = OrderedDict(
+    [("Detect Time", 0),
+     ("Orient", 0),
+     ("Pixels per cell", 0),
+     ("Cells per block", 0),
+     ("Training accuracy", 0),
+     ("Spatial size", 0),
+     ("Histogram bins", 0),
+     ("Layer1 threshold", 0),
+     ("Layer2 threshold", 0),
+     ("Layer1 max heat", 0),
+     ("Layer2 max heat", 0),
+     ("C Color Space", None),
+     ("H Color Space", None),]
+)
 
 
 def draw_namebox(img, box, name, color, thick=3):
@@ -67,3 +80,18 @@ def topmost(img, top, title=''):
     n_labels = set(img.ravel())
     print(title, heapq.nlargest(top, n_labels))
     return int(np.max(list(n_labels))), int(np.mean(list(n_labels)))
+
+
+def show_text(img, parameters=show_parameters):
+    lines = []
+    for key, value in parameters.items():
+        text = key + ": " + str(value)
+        lines.append(text)
+
+    for i, line in enumerate(lines):
+        x = 10
+        y = 30 + 40*i
+        cv2.putText(img, text=line, org=(x, y), fontFace=cv2.FONT_HERSHEY_PLAIN, \
+                fontScale=2, color=(255, 255, 00), thickness=2, lineType=cv2.LINE_AA)
+
+    return img
