@@ -274,13 +274,6 @@ class FeatureExtractor():
                     hog_ystop = ypos + nblocks_per_window
                     hog = self.hog_reval(hog_features, hog_ystart, hog_ystop, hog_xstart, hog_xstop)
                     img_features.append(hog)
-                    # for ch in range(hog_features.shape[2]):
-                    #     hog_channel = hog_features[ypos:ypos + nblocks_per_window, xpos:xpos + nblocks_per_window, ch]
-                    #     hog_feature = hog_channel.ravel()
-                    # # for ch in range(len(hog_features)):
-                    # #     hog = hog_features[ch]
-                    # #     hog_feature = hog[ypos:ypos + nblocks_per_window, xpos:xpos + nblocks_per_window].ravel()
-                    #     img_features.append(hog_feature)
 
                 img_features = np.concatenate(img_features).reshape(1, -1)
                 # Scale features and make a prediction
@@ -288,17 +281,12 @@ class FeatureExtractor():
                 test_prediction = self.svc.predict(test_features)
                 test_confidence = self.svc.decision_function(test_features)
 
-                # if test_prediction == 1:
-                #     # print(np.max(test_features), np.min(test_features), np.mean(test_features))
-                #     print(test_prediction, test_confidence)
-
                 xbox_left = np.int(xleft * scale)
                 ytop_draw = np.int(ytop * scale)
                 win_draw = np.int(window * scale)
                 box = ((xbox_left, ytop_draw + ystart), (xbox_left + win_draw, ytop_draw + win_draw + ystart))
                 slide_boxes.append(box)
                 if test_prediction == 1 and test_confidence > 0.2:
-                    # print(test_prediction, test_confidence)
                     bbox_list.append(box)
                     if test_confidence > 0.8:
                         bbox_list.append(box)

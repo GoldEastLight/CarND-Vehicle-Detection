@@ -267,7 +267,7 @@ class Filter():
                         max_cross_rate = cross_rate
                         win_box_idx = b_i
                         valid_size_scale = size_scale
-                if max_overlap_ratio > overlap_ratio_threshold and max_cross_rate > 0.6 \
+                if max_overlap_ratio > overlap_ratio_threshold and max_cross_rate > cross_rate_threshold \
                         and valid_size_scale < filter_parameters['valid_size_scale_threshold']:
                     ratio, max_v_i, max_cross_rate = self.find_max_overlap_ratio(increased_boxes[win_box_idx])
                     if v_i == max_v_i:
@@ -334,6 +334,7 @@ class Filter():
 
         layer2_threshold = min(boxes_len, self.layer2_threshold)
         print('layer2_threshold', layer2_threshold, boxes_len, self.layer2_max_heat)
+        show_parameters["Layer2 threshold"] = layer2_threshold
         structure = None#[[1,1,1],[1,1,1],[1,1,1]]
         self.layer2_output_boxes = self.detector.get_labeled_boxes(self.layer2_input_boxes, layer2_threshold, structure)
         self.layer2_max_heat = self.detector.max_heat
@@ -384,6 +385,8 @@ class Tracker():
             self.slide_boxes_list.append(slide_boxes)
             box_lists.extend(box_list)
         self.filter.filter(box_lists)
+        show_parameters["Layer1 max heat"] = self.filter.layer1_max_heat
+        show_parameters["Layer2 max heat"] = self.filter.layer2_max_heat
         t2 = time.time()
         self.time = round(t2-t, 2)
         show_parameters["Detect Time"] = str(self.time)
